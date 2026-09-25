@@ -8,6 +8,15 @@ from typing import Any
 
 from app.seed import SEED_ROWS
 
+# 待处理/异常口径：登记在此处的模块按状态实时推导，
+# 保证列表筛选、动作流转与运营概览三处口径始终一致（例如已驳回的许可单不计入待处理）。
+PENDING_STATUSES: dict[str, tuple[str, ...]] = {
+    "permit": ("待申请", "已受理"),
+}
+ABNORMAL_STATUSES: dict[str, tuple[str, ...]] = {
+    "permit": ("已驳回",),
+}
+
 
 class Store:
     def __init__(self) -> None:
@@ -27,6 +36,18 @@ class Store:
                 return row
         return None
 
+    def is_pending(self, module: str, row: dict[str, Any]) -> bool:
+        statuses = PENDING_STATUSES.get(module)
+        if statuses is not None:
+            return row.get("status") in statuses
+        return bool(row.get("pending"))
+
+    def is_abnormal(self, module: str, row: dict[str, Any]) -> bool:
+        statuses = ABNORMAL_STATUSES.get(module)
+        if statuses is not None:
+            return row.get("status") in statuses
+        return bool(row.get("abnormal"))
+
     def overview(self) -> dict[str, object]:
         modules: list[dict[str, object]] = []
         for name in self.module_names():
@@ -34,8 +55,8 @@ class Store:
             modules.append({
                 "name": name,
                 "created": len(rows),
-                "pending": sum(1 for row in rows if row.get("pending")),
-                "abnormal": sum(1 for row in rows if row.get("abnormal")),
+                "pending": sum(1 for row in rows if self.is_pending(name, row)),
+                "abnormal": sum(1 for row in rows if self.is_abnormal(name, row)),
             })
         cards = [
             {"label": "业务模块", "value": len(modules)},

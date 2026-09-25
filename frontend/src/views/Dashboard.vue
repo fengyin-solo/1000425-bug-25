@@ -23,6 +23,9 @@
           <td>{{ row.pending }}</td>
           <td>{{ row.abnormal }}</td>
         </tr>
+        <tr v-if="!moduleRows.length">
+          <td colspan="4" class="empty-state">{{ loadError || '暂无业务模块数据，请确认后端服务已启动后刷新页面' }}</td>
+        </tr>
       </tbody>
     </table>
   </section>
@@ -40,15 +43,19 @@ type Overview = {
 
 const cards = ref<Overview['cards']>([])
 const moduleRows = ref<Overview['modules']>([])
+const loadError = ref('')
 
 onMounted(async () => {
   try {
     const payload = await fetchJson<Overview>('/api/overview')
     cards.value = payload.cards
     moduleRows.value = payload.modules
-  } catch {
-    cards.value = [{"label": "业务模块", "value": 0}, {"label": "今日新增", "value": 0}]
-    moduleRows.value = [{"name": "厂区单元", "created": 0, "pending": 0, "abnormal": 0}, {"name": "进水监测", "created": 0, "pending": 0, "abnormal": 0}, {"name": "出水监测", "created": 0, "pending": 0, "abnormal": 0}, {"name": "曝气控制", "created": 0, "pending": 0, "abnormal": 0}, {"name": "加药管理", "created": 0, "pending": 0, "abnormal": 0}, {"name": "污泥处置", "created": 0, "pending": 0, "abnormal": 0}, {"name": "脱水运行", "created": 0, "pending": 0, "abnormal": 0}, {"name": "泵站运行", "created": 0, "pending": 0, "abnormal": 0}, {"name": "鼓风机组", "created": 0, "pending": 0, "abnormal": 0}, {"name": "膜组件", "created": 0, "pending": 0, "abnormal": 0}, {"name": "在线仪表", "created": 0, "pending": 0, "abnormal": 0}, {"name": "取样检测", "created": 0, "pending": 0, "abnormal": 0}, {"name": "药剂出入", "created": 0, "pending": 0, "abnormal": 0}, {"name": "能耗管理", "created": 0, "pending": 0, "abnormal": 0}, {"name": "报警中心", "created": 0, "pending": 0, "abnormal": 0}, {"name": "设备检修", "created": 0, "pending": 0, "abnormal": 0}, {"name": "受限空间作业", "created": 0, "pending": 0, "abnormal": 0}, {"name": "达标审核", "created": 0, "pending": 0, "abnormal": 0}]
+    loadError.value = ''
+  } catch (error) {
+    // 加载失败时保持空表并说明原因，不再填充假数据，避免待处理数与实际列表对不上
+    cards.value = []
+    moduleRows.value = []
+    loadError.value = error instanceof Error ? `运营概览加载失败：${error.message}` : '运营概览加载失败，请稍后刷新重试'
   }
 })
 </script>
