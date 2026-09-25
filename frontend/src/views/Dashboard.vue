@@ -23,6 +23,9 @@
           <td>{{ row.pending }}</td>
           <td>{{ row.abnormal }}</td>
         </tr>
+        <tr v-if="!moduleRows.length">
+          <td colspan="4" class="empty-state">暂无模块数据，请确认后端服务已启动后刷新页面</td>
+        </tr>
       </tbody>
     </table>
   </section>

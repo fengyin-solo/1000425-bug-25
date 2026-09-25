@@ -26,6 +26,9 @@ class EntryPayload(BaseModel):
 
     values: dict[str, Any] = Field(default_factory=dict)
     remark: str | None = None
+    # 操作人身份（name/role/team）：需要角色权限与归属校验的模块从这里取，
+    # 放在请求体里是因为中文角色名无法直接放进 HTTP 头
+    operator: dict[str, str] | None = None
 
 
 

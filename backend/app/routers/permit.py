@@ -6,13 +6,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
-from app.services.permit import PermitService
+from app.services.permit import Operator, PermitService
 
 router = APIRouter(prefix="/api/permit", tags=["受限空间作业"])
 
 service = PermitService()
 
-LIST_FIELDS = ["许可编号", "作业类型", "作业地点", "监护人", "安全措施", "许可时间", "有效期至", "许可状态"]
+LIST_FIELDS = ["许可编号", "作业类型", "作业地点", "归属班组", "监护人", "安全措施", "许可时间", "有效期至", "许可状态"]
 STATUSES = ["待申请", "已受理", "已许可", "已驳回", "已过期"]
 
 
@@ -30,6 +30,19 @@ def list_entries(
     return PageResult(items=items, total=total, page=page, size=size)
 
 
+@router.get("/summary")
+def summary() -> dict[str, int]:
+    """受限空间作业统计：待处理口径与列表状态一致，只数待申请、已受理。"""
+    return service.summary()
+
+
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出受限空间作业清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "permit", "total": total, "items": items}
+
+
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
     """读取单条作业许可单明细；不存在时给出可读的错误说明。"""
@@ -41,25 +54,28 @@ def get_entry(entry_id: int) -> dict:
 
 @router.post("", response_model=ActionResult)
 def create_entry(payload: EntryPayload) -> ActionResult:
-    """登记一条作业许可单，缺字段时说明原因而不是静默丢弃。"""
-    entry, missing = service.create_entry(payload.values)
-    if missing:
-        return ActionResult(ok=False, message=f"缺少必填字段：{'、'.join(missing)}")
+    """登记一条作业许可单，缺字段、编号重复或班组越界时说明原因而不是静默丢弃。"""
+    entry, error = service.create_entry(payload.values)
+    if error:
+        return ActionResult(ok=False, message=error)
     return ActionResult(ok=True, message="作业许可单已登记", entry=entry)
 
 
 @router.post("/{entry_id}/actions", response_model=ActionResult)
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条作业许可单执行提交申请、签发许可、驳回申请；不允许的动作会被拦下并说明原因。"""
+    """对单条作业许可单执行提交申请、签发许可、驳回申请。
+
+    签发与驳回按角色权限和归属班组受控：请求体 operator 字段需带
+    role 与 team，越权、越界或状态不允许的动作会被拦下并说明原因。
+    """
     action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
+    identity = payload.operator or {}
+    operator = Operator(
+        name=str(identity.get("name") or ""),
+        role=str(identity.get("role") or ""),
+        team=str(identity.get("team") or ""),
+    )
+    entry, message = service.run_action(entry_id, action, payload.values, operator)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出受限空间作业清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "permit", "total": total, "items": items}
